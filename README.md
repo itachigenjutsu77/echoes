@@ -1,6 +1,6 @@
 # Echoes
 
-Echoes is a minimalist social deduction multiplayer game inspired by Steve Jobs' design principles. The game emphasizes connection through silence and simplicity, focusing on human understanding through language.
+. The game emphasizes connection through silence and simplicity, focusing on human understanding through language.
 
 ## Core Concept
 - Tagline: Connection Through Silence
