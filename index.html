@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Echoes - Connection Through Silence</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #ffffff;
+            color: #333333;
+            line-height: 1.6;
+            overflow: hidden;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .header {
+            padding: 20px;
+            text-align: center;
+            border-bottom: 1px solid #e5e5e5;
+        }
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            color: #1a1a1a;
+            margin-bottom: 4px;
+        }
+        .header p {
+            font-size: 14px;
+            color: #666666;
+        }
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 40px 20px;
+        }
+        .game-prompt {
+            font-size: 48px;
+            font-weight: 700;
+            color: #0066cc;
+            text-align: center;
+            margin-bottom: 40px;
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .input-section {
+            width: 100%;
+            max-width: 500px;
+        }
+        .input-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            color: #1a1a1a;
+            margin-bottom: 8px;
+        }
+        textarea, input {
+            width: 100%;
+            padding: 16px;
+            border: 1px solid #e5e5e5;
+            border-radius: 8px;
+            font-size: 16px;
+            font-family: inherit;
+            transition: border-color 0.2s;
+        }
+        textarea {
+            resize: vertical;
+            min-height: 120px;
+        }
+        textarea:focus, input:focus {
+            outline: none;
+            border-color: #0066cc;
+        }
+        .timer {
+            text-align: center;
+            font-size: 18px;
+            font-weight: 600;
+            color: #0066cc;
+            margin: 20px 0;
+        }
+        .btn {
+            background: #0066cc;
+            color: white;
+            border: none;
+            padding: 16px 32px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            width: 100%;
+            max-width: 300px;
+        }
+        .btn:hover {
+            background: #0052a3;
+        }
+        .btn:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+        }
+        .players {
+            margin-top: 30px;
+            text-align: center;
+        }
+        .player-count {
+            font-size: 14px;
+            color: #666666;
+        }
+        .results {
+            max-width: 600px;
+            margin: 20px auto;
+        }
+        .response {
+            background: #f8f9fa;
+            padding: 20px;
+            margin-bottom: 16px;
+            border-radius: 8px;
+            border-left: 4px solid #0066cc;
+        }
+        .response strong {
+            color: #0066cc;
+        }
+        .hidden {
+            display: none;
+        }
+        @media (max-width: 600px) {
+            .game-prompt {
+                font-size: 36px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Echoes</h1>
+            <p>Connection Through Silence</p>
+        </div>
+        
+        <div class="main">
+            <!-- Lobby Screen -->
+            <div id="lobby" class="input-section">
+                <div class="input-group">
+                    <label>Your Name</label>
+                    <input type="text" id="playerName" placeholder="Enter your name" maxlength="20">
+                </div>
+                <div class="players">
+                    <div class="player-count" id="playerList">Waiting for players...</div>
+                </div>
+                <button class="btn" id="joinBtn">Join Game</button>
+            </div>
+
+            <!-- Prompt Screen -->
+            <div id="promptScreen" class="hidden input-section">
+                <div class="game-prompt" id="promptWord">mirror</div>
+                <div class="timer" id="timer">60</div>
+                <div class="input-group">
+                    <label>One sentence response:</label>
+                    <textarea id="responseInput" placeholder="What does this word make you think of?" maxlength="280"></textarea>
+                </div>
+                <button class="btn" id="submitBtn">Submit Response</button>
+            </div>
+
+            <!-- Voting Screen -->
+            <div id="votingScreen" class="hidden input-section">
+                <div class="game-prompt">Vote for the best match</div>
+                <div class="results" id="responsesList"></div>
+                <button class="btn" id="voteSubmitBtn">Submit Vote</button>
+            </div>
+
+            <!-- Results Screen -->
+            <div id="resultsScreen" class="hidden input-section">
+                <div class="game-prompt">Round Complete</div>
+                <div id="resultsContent"></div>
+                <button class="btn" id="nextRoundBtn">Next Round</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class EchoesGame {
+            constructor() {
+                this.players = new Map();
+                this.gameState = 'lobby'; // lobby, prompt, voting, results
+                this.currentPrompt = '';
+                this.currentRound = 1;
+                this.maxRounds = 5;
+                this.responses = new Map();
+                this.votes = new Map();
+                this.timer = 60;
+                this.timerInterval = null;
+                
+                this.initializeElements();
+                this.bindEvents();
+                this.generatePrompt();
+            }
+
+            initializeElements() {
+                this.elements = {
+                    lobby: document.getElementById('lobby'),
+                    promptScreen: document.getElementById('promptScreen'),
+                    votingScreen: document.getElementById('votingScreen'),
+                    resultsScreen: document.getElementById('resultsScreen'),
+                    playerName: document.getElementById('playerName'),
+                    playerList: document.getElementById('playerList'),
+                    promptWord: document.getElementById('promptWord'),
+                    timer: document.getElementById('timer'),
+                    responseInput: document.getElementById('responseInput'),
+                    responsesList: document.getElementById('responsesList'),
+                    resultsContent: document.getElementById('resultsContent'),
+                    joinBtn: document.getElementById('joinBtn'),
+                    submitBtn: document.getElementById('submitBtn'),
+                    voteSubmitBtn: document.getElementById('voteSubmitBtn'),
+                    nextRoundBtn: document.getElementById('nextRoundBtn')
+                };
+            }
+
+            bindEvents() {
+                this.elements.joinBtn.onclick = () => this.joinGame();
+                this.elements.submitBtn.onclick = () => this.submitResponse();
+                this.elements.voteSubmitBtn.onclick = () => this.submitVote();
+                this.elements.nextRoundBtn.onclick = () => this.nextRound();
+                
+                this.elements.responseInput.onkeypress = (e) => {
+                    if (e.key === 'Enter' && e.ctrlKey) {
+                        this.submitResponse();
+                    }
+                };
+            }
+
+            generatePrompt() {
+                const prompts = [
+                    'mirror', 'silence', 'growth', 'echo', 'shadow', 'light', 
+                    'memory', 'dream', 'touch', 'time', 'space', 'fear',
+                    'love', 'trust', 'change', 'home', 'path', 'fire',
+                    'water', 'wind', 'earth', 'sky', 'hope', 'loss'
+                ];
+                this.currentPrompt = prompts[Math.floor(Math.random() * prompts.length)];
+            }
+
+            joinGame() {
+                const name = this.elements.playerName.value.trim();
+                if (!name) {
+                    alert('Please enter your name');
+                    return;
+                }
+                
+                const playerId = 'p' + Date.now();
+                this.myPlayer = { id: playerId, name };
+                this.players.set(playerId, { name, ready: false, score: 0 });
+                
+                this.updatePlayerList();
+                this.startPromptPhase();
+            }
+
+            updatePlayerList() {
+                const count = this.players.size;
+                this.elements.playerList.textContent = `Players (${count}/8): ${Array.from(this.players.values()).map(p => p.name).join(', ')}`;
+            }
+
+            startPromptPhase() {
+                this.gameState = 'prompt';
+                this.elements.lobby.classList.add('hidden');
+                this.elements.promptScreen.classList.remove('hidden');
+                this.elements.promptWord.textContent = this.currentPrompt;
+                this.elements.responseInput.value = '';
+                this.elements.responseInput.focus();
+                
+                this.timer = 60;
+                this.updateTimer();
+                this.timerInterval = setInterval(() => {
+                    this.timer--;
+                    this.updateTimer();
+                    if (this.timer <= 0) {
+                        clearInterval(this.timerInterval);
+                        this.autoSubmit();
+                    }
+                }, 1000);
+            }
+
+            updateTimer() {
+                this.elements.timer.textContent = this.timer;
+                this.elements.timer.style.color = this.timer <= 10 ? '#cc0000' : '#0066cc';
+            }
+
+            submitResponse() {
+                const response = this.elements.responseInput.value.trim();
+                if (!response) {
+                    alert('Please enter a response');
+                    return;
+                }
+                
+                clearInterval(this.timerInterval);
+                this.responses.set(this.myPlayer.id, response);
+                this.simulateOtherPlayers();
+                setTimeout(() => this.startVotingPhase(), 1500);
+            }
+
+            simulateOtherPlayers() {
+                // Simulate 7 other players
+                const otherPlayerIds = [];
+                for (let i = 0; i < 7; i++) {
+                    const id = 'bot' + i;
+                    otherPlayerIds.push(id);
+                    const responses = this.generateResponse(this.currentPrompt);
+                    this.responses.set(id, responses);
+                }
+                this.otherPlayers = otherPlayerIds;
+            }
+
+            generateResponse(prompt) {
+                const templates = [
+                    `The ${prompt} shows me who I really am.`,
+                    `In ${prompt}, I find unexpected clarity.`,
+                    `${prompt} connects the past to the present.`,
+                    `True ${prompt} comes from within.`,
+                    `I seek ${prompt} in moments of stillness.`
+                ];
+                return templates[Math.floor(Math.random() * templates.length)].replace(/\$\{prompt\}/g, prompt);
+            }
+
+            autoSubmit() {
+                if (this.elements.responseInput.value.trim()) return;
+                this.elements.responseInput.value = `The ${this.currentPrompt} reveals hidden truths.`;
+                setTimeout(() => this.submitResponse(), 500);
+            }
+
+            startVotingPhase() {
+                this.gameState = 'voting';
+                this.elements.promptScreen.classList.add('hidden');
+                this.elements.votingScreen.classList.remove('hidden');
+                
+                const responsesList = this.elements.responsesList;
+                responsesList.innerHTML = '';
+                
+                const allResponses = Array.from(this.responses.entries());
+                allResponses.sort(() => Math.random() - 0.5); // Shuffle
+                
+                allResponses.forEach(([playerId, response], index) => {
+                    const div = document.createElement('div');
+                    div.className = 'response';
+                    div.innerHTML = `
+                        <div><strong>Response ${index + 1}:</strong> ${response}</div>
+                        <label>
+                            <input type="radio" name="vote" value="${playerId}" style="margin-right: 8px;">
+                            Vote for this
+                        </label>
+                    `;
+                    responsesList.appendChild(div);
+                });
+            }
+
+            submitVote() {
+                const selected = document.querySelector('input[name="vote"]:checked');
+                if (!selected) {
+                    alert('Please select a response to vote for');
+                    return;
+                }
+                
+                this.votes.set(this.myPlayer.id, selected.value);
+                this.calculateResults();
+            }
+
+            calculateResults() {
+                this.gameState = 'results';
+                this.elements.votingScreen.classList.add('hidden');
+                this.elements.resultsScreen.classList.remove('hidden');
+                
+                const resultsContent = this.elements.resultsContent;
+                resultsContent.innerHTML = '';
+                
+                // Simulate votes from other players
+                Array.from(this.responses.keys()).forEach(playerId => {
+                    if (playerId !== this.myPlayer.id) {
+                        const voteFor = Array.from(this.responses.keys())[Math.floor(Math.random() * this.responses.size)];
+                        this.votes.set(playerId, voteFor);
+                    }
+                });
+                
+                const voteCounts = new Map();
+                this.votes.forEach((voteFor, voter) => {
+                    if (!voteCounts.has(voteFor)) voteCounts.set(voteFor, 0);
+                    voteCounts.set(voteFor, voteCounts.get(voteFor) + 1);
+                });
+                
+                const winningResponse = Array.from(voteCounts.entries()).reduce((a, b) => a[1] > b[1] ? a : b)[0];
+                
+                resultsContent.innerHTML = `
+                    <div class="response">
+                        <strong>Winning Response (${voteCounts.get(winningResponse)} votes):</strong><br>
+                        ${this.responses.get(winningResponse)}
+                    </div>
+                    <div style="margin: 20px 0;">
+                        <strong>Your Response:</strong> ${this.responses.get(this.myPlayer.id)}
+                    </div>
+                    <div>
+                        Round ${this.currentRound} of ${this.maxRounds} complete!<br>
+                        <small>Play another round or refresh to restart.</small>
+                    </div>
+                `;
+            }
+
+            nextRound() {
+                if (this.currentRound >= this.maxRounds) {
+                    this.elements.resultsContent.innerHTML += '<div style="margin-top: 20px; font-size: 18px;">Game Complete! Refresh to play again.</div>';
+                    return;
+                }
+                
+                this.currentRound++;
+                this.responses.clear();
+                this.votes.clear();
+                this.generatePrompt();
+                this.elements.resultsScreen.classList.add('hidden');
+                this.elements.lobby.classList.remove('hidden');
+                this.elements.playerName.value = this.myPlayer ? this.myPlayer.name : '';
+                this.elements.playerName.focus();
+            }
+        }
+
+        // Start the game
+        new EchoesGame();
+    </script>
+</body>
+</html>
